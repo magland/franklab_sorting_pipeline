@@ -14,6 +14,9 @@ import numpy as np
 import mlprocessors as mlpr
 import spiketoolkit as st
 import argparse
+import tempfile
+import shutil
+from shellscript import ShellScript
 
 def main():
 
@@ -94,23 +97,28 @@ def mkdir2(path):
 # See: https://github.com/flatironinstitute/spikeforest/blob/master/spikeforest/spikeforestsorters/mountainsort4/mountainsort4.py
 class CustomSorting(mlpr.Processor):
     NAME = 'CustomSorting'
-    VERSION = '0.1.3'
+    VERSION = '0.1.4'
 
     recording_file_in = mlpr.Input('Path to raw.mda')
     firings_out = mlpr.Output('Output firings file')
 
     samplerate = mlpr.FloatParameter("Sampling frequency")
 
-    detect_sign = mlpr.IntegerParameter(
-        'Use -1, 0, or 1, depending on the sign of the spikes in the recording')
-    adjacency_radius = mlpr.FloatParameter(
-        'Use -1 to include all channels in every neighborhood')
+    mask_out_artifacts = mlpr.BoolParameter(optional=True, default=False,
+                                description='Whether to mask out artifacts')
     freq_min = mlpr.FloatParameter(
         optional=True, default=300, description='Use 0 for no bandpass filtering')
     freq_max = mlpr.FloatParameter(
         optional=True, default=6000, description='Use 0 for no bandpass filtering')
     whiten = mlpr.BoolParameter(optional=True, default=True,
                                 description='Whether to do channel whitening as part of preprocessing')
+
+    detect_sign = mlpr.IntegerParameter(
+        'Use -1, 0, or 1, depending on the sign of the spikes in the recording')
+    adjacency_radius = mlpr.FloatParameter(
+        'Use -1 to include all channels in every neighborhood')
+    
+    
     clip_size = mlpr.IntegerParameter(
         optional=True, default=50, description='')
     detect_threshold = mlpr.FloatParameter(
@@ -124,35 +132,72 @@ class CustomSorting(mlpr.Processor):
         # Replace this function with system calls, etc to do
         # mask_out_artifactrs, ml_ms4alg, curation, etc.
 
-        X = sf.mdaio.readmda(self.recording_file_in)
-        geom = np.zeros((X.shape[0], 2))
-        recording = se.NumpyRecordingExtractor(X, samplerate=30000, geom=geom)
-        recording = st.preprocessing.bandpass_filter(
-            recording=recording,
-            freq_min=self.freq_min, freq_max=self.freq_max
-        )
-        if self.whiten:
-            recording = st.preprocessing.whiten(recording=recording)
+        with TemporaryDirectory() as tmpdir:
+            if self.mask_out_artifacts:
+                print('Masking out artifacts...')
+                rec_fname = tmpdir + '/raw.mda'
+                _mask_out_artifacts(self.recording_file_in, rec_fname)
+            else:
+                rec_fname = self.recording_file_in
 
-        num_workers = 2
+            X = sf.mdaio.readmda(rec_fname)
+            geom = np.zeros((X.shape[0], 2))
+            recording = se.NumpyRecordingExtractor(X, samplerate=30000, geom=geom)
+            recording = st.preprocessing.bandpass_filter(
+                recording=recording,
+                freq_min=self.freq_min, freq_max=self.freq_max
+            )
+            if self.whiten:
+                recording = st.preprocessing.whiten(recording=recording)
 
-        sorting = ml_ms4alg.mountainsort4(
-            recording=recording,
-            detect_sign=self.detect_sign,
-            adjacency_radius=self.adjacency_radius,
-            clip_size=self.clip_size,
-            detect_threshold=self.detect_threshold,
-            detect_interval=self.detect_interval,
-            num_workers=num_workers
-        )
-        sf.SFMdaSortingExtractor.write_sorting(
-            sorting=sorting,
-            save_path=self.firings_out
-        )
+            num_workers = 2
+
+            sorting = ml_ms4alg.mountainsort4(
+                recording=recording,
+                detect_sign=self.detect_sign,
+                adjacency_radius=self.adjacency_radius,
+                clip_size=self.clip_size,
+                detect_threshold=self.detect_threshold,
+                detect_interval=self.detect_interval,
+                num_workers=num_workers
+            )
+            sf.SFMdaSortingExtractor.write_sorting(
+                sorting=sorting,
+                save_path=self.firings_out
+            )
+
+class TemporaryDirectory():
+    def __init__(self):
+        pass
+
+    def __enter__(self):
+        self._path = tempfile.mkdtemp()
+        return self._path
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        shutil.rmtree(self._path)
+
+    def path(self):
+        return self._path
+
+def _mask_out_artifacts(timeseries_in, timeseries_out):
+    script = ShellScript('''
+    #!/bin/bash
+    mp-run-process ms3.mask_out_artifacts --timeseries {} --timeserious_out {}
+    '''.format(timeseries_in, timeseries_out))
+    script.start()
+    retcode = script.wait()
+    if retcode != 0:
+        raise Exception('problem running ms3.mask_out_artifacts')
+
 
 
 def spike_sorting(recording_file_in, firings_out, args):
     CustomSorting.execute(
+        mask_out_artifacts=True,
+        freq_min=300,
+        freq_max=6000,
+        whiten=True,
         samplerate=30000,
         recording_file_in=recording_file_in,
         firings_out=firings_out,
