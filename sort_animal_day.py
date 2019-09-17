@@ -1,5 +1,8 @@
 #!/usr/bin/env python
-# coding: utf-8
+
+# prerequisites:
+# pip install spikeforest
+# pip install ml_ms4alg
 
 # Spike sorting of one animal-day
 import os
