@@ -183,7 +183,7 @@ class TemporaryDirectory():
 def _mask_out_artifacts(timeseries_in, timeseries_out):
     script = ShellScript('''
     #!/bin/bash
-    mp-run-process ms3.mask_out_artifacts --timeseries {} --timeserious_out {}
+    mp-run-process ms3.mask_out_artifacts --timeseries {} --timeseries_out {}
     '''.format(timeseries_in, timeseries_out))
     script.start()
     retcode = script.wait()
