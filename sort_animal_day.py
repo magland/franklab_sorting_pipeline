@@ -146,6 +146,13 @@ class CustomSorting(mlpr.Processor):
         # mask_out_artifactrs, ml_ms4alg, curation, etc.
 
         with TemporaryDirectory() as tmpdir:
+
+            filt = tmpdir + '/filt.mda'
+            filt2 = tmpdir + '/filt2.mda'
+            pre = tmpdir + '/pre.mda'
+            recording = st..preprocessing.bandpass_filter(
+            
+
             if self.mask_out_artifacts:
                 print('Masking out artifacts...')
                 rec_fname = tmpdir + '/raw.mda'
@@ -174,6 +181,8 @@ class CustomSorting(mlpr.Processor):
                 recording = st.preprocessing.whiten(recording=recording)
 
             num_workers = 2
+
+            print('-------------------------------------------- 1')
 
             sorting = ml_ms4alg.mountainsort4(
                 recording=recording,
@@ -219,6 +228,11 @@ class CustomSorting(mlpr.Processor):
 
             shutil.copy(metrics_path, self.metrics_out)
             
+            print('Creating label map...')
+            label_map_path = tmpdir +'/label_map.mda' 
+            _create_label_map(metrics_path, label_map_path)
+
+            print('Applying label map...')
 
 class TemporaryDirectory():
     def __init__(self):
@@ -233,6 +247,16 @@ class TemporaryDirectory():
 
     def path(self):
         return self._path
+
+def _bandpass_filter(timeseries_in, timeseries_out):
+    script = ShellScript('''
+    #!/bin/bash
+    ml-run-process ms3.bandpass_filter -i timeseries:{} -o timeseries_out:{} -p samplerate:30000 freq_min:300 freq_max:6000 --force_run
+    '''.format(timeseries_in, timeseries_out))
+    script.start()
+    retcode = script.wait()
+    if retcode != 0:
+        raise Exception('problem running ms3.bandpass_filter')
 
 def _mask_out_artifacts(timeseries_in, timeseries_out):
     script = ShellScript('''
@@ -277,6 +301,17 @@ def _combine_metrics(metrics1, metrics2, metrics_out):
 def _read_geom_csv(path):
     geom = np.genfromtxt(path, delimiter=',')
     return geom
+
+def _create_label_map(metrics, label_map_out):
+    script = ShellScript('''
+    #!/bin/bash
+    mp-run-process pyms.create_label_map --metrics={} --label_map_out={}
+    '''.format(metrics, label_map_out))
+    script.start()
+    retcode = script.wait()
+    if retcode != 0:
+        raise Exception('problem running pyms.create_label_map')
+
 
 def spike_sorting(*, recording_file_in, geom_in, firings_out, metrics_out, args):
     params = dict(
