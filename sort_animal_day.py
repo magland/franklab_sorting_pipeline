@@ -112,7 +112,7 @@ class CustomSorting(mlpr.Processor):
     recording_file_in = mlpr.Input('Path to raw.mda')
     geom_in = mlpr.Input('Path to geom.csv', optional=True)
     firings_out = mlpr.Output('Output firings.mda file')
-    # firings_curated_out = mlpr.Output('Output firings.curated.mda file')
+    firings_curated_out = mlpr.Output('Output firings.curated.mda file')
     metrics_out = mlpr.Output('Metrics .json output')
 
     samplerate = mlpr.FloatParameter("Sampling frequency")
@@ -150,17 +150,22 @@ class CustomSorting(mlpr.Processor):
             filt = tmpdir + '/filt.mda'
             filt2 = tmpdir + '/filt2.mda'
             pre = tmpdir + '/pre.mda'
-            recording = st..preprocessing.bandpass_filter(
-            
+            print('Filtering...')
+            _bandpass_filter(self.recording_file_in, filt)
 
             if self.mask_out_artifacts:
                 print('Masking out artifacts...')
-                rec_fname = tmpdir + '/raw.mda'
-                _mask_out_artifacts(self.recording_file_in, rec_fname)
+                _mask_out_artifacts(filt, filt2)
             else:
-                rec_fname = self.recording_file_in
+                filt2 = filt
 
-            X = sf.mdaio.readmda(rec_fname)
+            if self.whiten:
+                print('Whitening...')
+                _whiten(filt2,pre)
+            else:
+                pre = filt2
+
+            X = sf.mdaio.readmda(pre)
             if type(self.geom_in) == str:
                 print('Using geom.csv from a file', self.geom_in)
                 geom = _read_geom_csv(self.geom_in)
@@ -173,13 +178,7 @@ class CustomSorting(mlpr.Processor):
                 print('Making a trivial geom file.')
                 geom = np.zeros((X.shape[0], 2))
             recording = se.NumpyRecordingExtractor(X, samplerate=30000, geom=geom)
-            recording = st.preprocessing.bandpass_filter(
-                recording=recording,
-                freq_min=self.freq_min, freq_max=self.freq_max
-            )
-            if self.whiten:
-                recording = st.preprocessing.whiten(recording=recording)
-
+            
             num_workers = 2
 
             print('-------------------------------------------- 1')
@@ -233,6 +232,7 @@ class CustomSorting(mlpr.Processor):
             _create_label_map(metrics_path, label_map_path)
 
             print('Applying label map...')
+            _apply_label_map(firings, label_map_path, firings_curated_out)        
 
 class TemporaryDirectory():
     def __init__(self):
@@ -257,6 +257,16 @@ def _bandpass_filter(timeseries_in, timeseries_out):
     retcode = script.wait()
     if retcode != 0:
         raise Exception('problem running ms3.bandpass_filter')
+
+def _whiten(timeseries_in, timeseries_out):
+    script = ShellScript('''
+    #!/bin/bash
+    ml-run-process ms3.whiten -i timeseries:{} -o timeseries_out:{} --force_run
+    '''.format(timeseries_in, timeseries_out))
+    script.start()
+    retcode = script.wait()
+    if retcode !=0:
+        raise Exception('problem running ms3.whiten')
 
 def _mask_out_artifacts(timeseries_in, timeseries_out):
     script = ShellScript('''
@@ -305,14 +315,23 @@ def _read_geom_csv(path):
 def _create_label_map(metrics, label_map_out):
     script = ShellScript('''
     #!/bin/bash
-    mp-run-process pyms.create_label_map --metrics={} --label_map_out={}
+    mp-run-process ms4alg.create_label_map -i metrics:{} -o label_map_out:{} --force_run
     '''.format(metrics, label_map_out))
     script.start()
     retcode = script.wait()
     if retcode != 0:
         raise Exception('problem running pyms.create_label_map')
 
-
+def _apply_label_map(firings, label_map_path, firings_curated_out)        
+    script = ShellScript('''
+    #!/bin/bash
+    ml-run-process ms4alg.apply_label_map -i firings:{} label_map:{} -o firings_out:{} --force_run
+    '''.format(self.firings_out, label_map_path, firings_curated_out))
+    script.start()
+    retcode = script.wait()
+    if retcode !=0:
+        raise Exception('problem running ms4alg.apply_label_map')
+    
 def spike_sorting(*, recording_file_in, geom_in, firings_out, metrics_out, args):
     params = dict(
         recording_file_in=recording_file_in,
