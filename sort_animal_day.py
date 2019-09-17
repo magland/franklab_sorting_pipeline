@@ -16,6 +16,7 @@ def main():
     parser = argparse.ArgumentParser(description="Franklab spike sorting for a single animal day")
     parser.add_argument('--input', help='The input directory containing the animal day ephys data', )
     parser.add_argument('--output', help='The output directory where the sorting results will be written')
+    parser.add_argument('--test', help='Only run 2 epochs and 2 ntrodes in each', action='store_true')
 
     args = parser.parse_args()
 
@@ -29,8 +30,9 @@ def main():
     epochs = []
     for name in sorted(os.listdir(animal_day_path)):
         if name.endswith('.mda'):
-            epochs.append(load_epoch(animal_day_path +
-                                    '/' + name, name=name[0:-4]))
+            epochs.append(load_epoch(animal_day_path + '/' + name, name=name[0:-4], test=args.test))
+    if args.test:
+        epochs = epochs[0:2]
 
     mkdir2(animal_day_output_path)
 
@@ -59,13 +61,15 @@ def load_ntrode(path, *, name):
         recording_file=mt.createSnapshot(path=path)
     )
 
-def load_epoch(path, *, name):
+def load_epoch(path, *, name, test=False):
     ntrodes = []
     for name2 in sorted(os.listdir(path)):
         if name2.endswith('.mda'):
             ntrodes.append(
                 load_ntrode(path + '/' + name2, name=name2[0:-4])
             )
+    if test:
+        ntrodes=ntrodes[0:2]
     return dict(
         path=path,
         name=name,
