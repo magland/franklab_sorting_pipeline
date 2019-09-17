@@ -19,6 +19,8 @@ def main():
     parser = argparse.ArgumentParser(description="Franklab spike sorting for a single animal day")
     parser.add_argument('--input', help='The input directory containing the animal day ephys data', )
     parser.add_argument('--output', help='The output directory where the sorting results will be written')
+    parser.add_argument('--num_jobs', help='Number of parallel jobs', required=False, default=1)
+    parser.add_argument('--force_run', help='Force the processing to run (no cache)', action='store_true')
     parser.add_argument('--test', help='Only run 2 epochs and 2 ntrodes in each', action='store_true')
 
     args = parser.parse_args()
@@ -40,8 +42,10 @@ def main():
 
     mkdir2(animal_day_output_path)
 
+    print('Num parallel jobs: {}'.format(args.num_jobs))
+
     # Start the job queue
-    job_handler = mlpr.ParallelJobHandler(3)
+    job_handler = mlpr.ParallelJobHandler(int(args.num_jobs))
     with mlpr.JobQueue(job_handler=job_handler) as JQ:
         for epoch in epochs:
             print('PROCESSING EPOCH: {}'.format(epoch['path']))
@@ -54,7 +58,8 @@ def main():
                 print('Sorting...')
                 spike_sorting(
                     recording_file_in,
-                    firings_out
+                    firings_out,
+                    args
                 )
         JQ.wait()
 
@@ -122,6 +127,11 @@ class CustomSorting(mlpr.Processor):
         geom = np.zeros((X.shape[0], 2))
         recording = se.NumpyRecordingExtractor(X, samplerate=30000, geom=geom)
 
+        num_workers = 2
+        os.environ['MKL_NUM_THREADS'] = str(num_workers)
+        os.environ['NUMEXPR_NUM_THREADS'] = str(num_workers)
+        os.environ['OMP_NUM_THREADS'] = str(num_workers)
+
         sorting = ml_ms4alg.mountainsort4(
             recording=recording,
             detect_sign=self.detect_sign,
@@ -129,7 +139,7 @@ class CustomSorting(mlpr.Processor):
             clip_size=self.clip_size,
             detect_threshold=self.detect_threshold,
             detect_interval=self.detect_interval,
-            num_workers=1
+            num_workers=num_workers
         )
         sf.SFMdaSortingExtractor.write_sorting(
             sorting=sorting,
@@ -137,13 +147,14 @@ class CustomSorting(mlpr.Processor):
         )
 
 
-def spike_sorting(recording_file_in, firings_out):
+def spike_sorting(recording_file_in, firings_out, args):
     CustomSorting.execute(
         samplerate=30000,
         recording_file_in=recording_file_in,
         firings_out=firings_out,
         detect_sign=-1,
-        adjacency_radius=50
+        adjacency_radius=50,
+        _force_run=args.force_run
     )
 
 def mkdir2(path):
