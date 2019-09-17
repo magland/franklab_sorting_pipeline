@@ -6,15 +6,25 @@ import os
 from mountaintools import client as mt
 import spikeextractors as se
 import spikeforest as sf
-import spikeforestsorters as sorters
 import ml_ms4alg
 import numpy as np
 import mlprocessors as mlpr
+import argparse
 
 def main():
+
+    parser = argparse.ArgumentParser(description="Franklab spike sorting for a single animal day")
+    parser.add_argument('--input', help='The input directory containing the animal day ephys data', )
+    parser.add_argument('--output', help='The output directory where the sorting results will be written')
+
+    args = parser.parse_args()
+
     # animal_day_path = '/vortex2/jason/kf19/preprocessing/20170913'
-    animal_day_path = '20170913_kf19'
-    animal_day_output_path = 'test_animal_day_output'
+    # animal_day_path = '20170913_kf19'
+    # animal_day_output_path = 'test_animal_day_output'
+
+    animal_day_path = args.input
+    animal_day_output_path = args.output
 
     epochs = []
     for name in sorted(os.listdir(animal_day_path)):
@@ -23,8 +33,6 @@ def main():
                                     '/' + name, name=name[0:-4]))
 
     mkdir2(animal_day_output_path)
-    intermediate_path = animal_day_output_path + '/intermediate'
-    mkdir2(intermediate_path)
 
     # Start the job queue
     job_handler = mlpr.ParallelJobHandler(3)
@@ -32,19 +40,14 @@ def main():
         for epoch in epochs:
             print('PROCESSING EPOCH: {}'.format(epoch['path']))
             mkdir2(animal_day_output_path + '/' + epoch['name'])
-            mkdir2(intermediate_path + '/' + epoch['name'])
             for ntrode in epoch['ntrodes']:
                 print('PROCESSING NTRODE: {}'.format(ntrode['path']))
                 mkdir2(animal_day_output_path + '/' + epoch['name'] + '/' + ntrode['name'])
-                recording_dir = intermediate_path + '/' + epoch['name'] + '/' + ntrode['name']
                 firings_out = animal_day_output_path + '/' + epoch['name'] + '/' + ntrode['name'] + '/firings.mda'
-                X = sf.mdaio.readmda(mt.realizeFile(ntrode['ephys']))
-                geom = np.zeros((X.shape[0], 2))
-                recording = se.NumpyRecordingExtractor(X, samplerate=30000, geom=geom)
-                sf.SFMdaRecordingExtractor.write_recording(recording=recording, save_path=recording_dir)
+                recording_file_in = ntrode['recording_file']
                 print('Sorting...')
                 spike_sorting(
-                    recording_dir,
+                    recording_file_in,
                     firings_out
                 )
         JQ.wait()
@@ -53,7 +56,7 @@ def load_ntrode(path, *, name):
     return dict(
         name=name,
         path=path,
-        ephys=mt.createSnapshot(path=path)
+        recording_file=mt.createSnapshot(path=path)
     )
 
 def load_epoch(path, *, name):
@@ -80,8 +83,10 @@ class CustomSorting(mlpr.Processor):
     NAME = 'CustomSorting'
     VERSION = '0.1.2'
 
-    recording_dir = mlpr.Input('Directory of recording', directory=True)
+    recording_file_in = mlpr.Input('Path to raw.mda')
     firings_out = mlpr.Output('Output firings file')
+
+    samplerate = mlpr.FloatParameter("Sampling frequency")
 
     detect_sign = mlpr.IntegerParameter(
         'Use -1, 0, or 1, depending on the sign of the spikes in the recording')
@@ -105,10 +110,11 @@ class CustomSorting(mlpr.Processor):
     def run(self):
         # Replace this function with system calls, etc to do
         # mask_out_artifactrs, ml_ms4alg, curation, etc.
-        print('================================================= test 1')
-        recording = sf.SFMdaRecordingExtractor(
-            dataset_directory=self.recording_dir
-        )
+
+        X = sf.mdaio.readmda(self.recording_file_in)
+        geom = np.zeros((X.shape[0], 2))
+        recording = se.NumpyRecordingExtractor(X, samplerate=30000, geom=geom)
+
         sorting = ml_ms4alg.mountainsort4(
             recording=recording,
             detect_sign=self.detect_sign,
@@ -122,12 +128,12 @@ class CustomSorting(mlpr.Processor):
             sorting=sorting,
             save_path=self.firings_out
         )
-        print('================================================= test 2')
 
 
-def spike_sorting(recording_dir, firings_out):
+def spike_sorting(recording_file_in, firings_out):
     CustomSorting.execute(
-        recording_dir=recording_dir,
+        samplerate=30000,
+        recording_file_in=recording_file_in,
         firings_out=firings_out,
         detect_sign=-1,
         adjacency_radius=50
