@@ -97,7 +97,7 @@ def mkdir2(path):
 # See: https://github.com/flatironinstitute/spikeforest/blob/master/spikeforest/spikeforestsorters/mountainsort4/mountainsort4.py
 class CustomSorting(mlpr.Processor):
     NAME = 'CustomSorting'
-    VERSION = '0.1.4'
+    VERSION = '0.1.5'
 
     recording_file_in = mlpr.Input('Path to raw.mda')
     firings_out = mlpr.Output('Output firings file')
