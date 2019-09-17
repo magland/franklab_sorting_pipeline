@@ -27,12 +27,13 @@ def main():
     animal_day_path = args.input
     animal_day_output_path = args.output
 
-    epochs = []
-    for name in sorted(os.listdir(animal_day_path)):
-        if name.endswith('.mda'):
-            epochs.append(load_epoch(animal_day_path + '/' + name, name=name[0:-4], test=args.test))
+    epoch_names = [name for name in sorted(os.listdir(animal_day_path)) if name.endswith('.mda')]
     if args.test:
-        epochs = epochs[0:2]
+        epoch_names = epoch_names[0:2]
+    epochs = [
+        load_epoch(animal_day_path + '/' + name, name=name[0:-4], test=args.test)
+        for name in epoch_names
+    ]
 
     mkdir2(animal_day_output_path)
 
@@ -62,14 +63,13 @@ def load_ntrode(path, *, name):
     )
 
 def load_epoch(path, *, name, test=False):
-    ntrodes = []
-    for name2 in sorted(os.listdir(path)):
-        if name2.endswith('.mda'):
-            ntrodes.append(
-                load_ntrode(path + '/' + name2, name=name2[0:-4])
-            )
+    ntrode_names = [name for name in sorted(os.listdir(path)) if name.endswith('.mda')]
     if test:
-        ntrodes=ntrodes[0:2]
+        ntrode_names = ntrode_names[0:2]
+    ntrodes = [
+        load_ntrode(path + '/' + name2, name=name2[0:-4])
+        for name2 in ntrode_names
+    ]
     return dict(
         path=path,
         name=name,
