@@ -61,12 +61,19 @@ def main():
                 firings_out = animal_day_output_path + '/' + epoch['name'] + '/' + ntrode['name'] + '/firings.mda'
                 metrics_out = animal_day_output_path + '/' + epoch['name'] + '/' + ntrode['name'] + '/metrics.json'
                 recording_file_in = ntrode['recording_file']
+                geom_in = recording_file_in[0:-4] + '.geom.csv'
+                if os.path.exists(geom_in):
+                    print('Using geometry file: {}'.format(geom_in))
+                else:
+                    geom_in = None
+                
                 print('Sorting...')
                 spike_sorting(
-                    recording_file_in,
-                    firings_out,
-                    metrics_out,
-                    args
+                    recording_file_in=recording_file_in,
+                    geom_in=geom_in,
+                    firings_out=firings_out,
+                    metrics_out=metrics_out,
+                    args=args
                 )
         JQ.wait()
 
@@ -100,9 +107,10 @@ def mkdir2(path):
 # See: https://github.com/flatironinstitute/spikeforest/blob/master/spikeforest/spikeforestsorters/mountainsort4/mountainsort4.py
 class CustomSorting(mlpr.Processor):
     NAME = 'CustomSorting'
-    VERSION = '0.1.6'
+    VERSION = '0.1.7'
 
     recording_file_in = mlpr.Input('Path to raw.mda')
+    geom_in = mlpr.Input('Path to geom.csv', optional=True)
     firings_out = mlpr.Output('Output firings.mda file')
     # firings_curated_out = mlpr.Output('Output firings.curated.mda file')
     metrics_out = mlpr.Output('Metrics .json output')
@@ -146,7 +154,17 @@ class CustomSorting(mlpr.Processor):
                 rec_fname = self.recording_file_in
 
             X = sf.mdaio.readmda(rec_fname)
-            geom = np.zeros((X.shape[0], 2))
+            if type(self.geom_in) == str:
+                print('Using geom.csv from a file', self.geom_in)
+                geom = _read_geom_csv(self.geom_in)
+            else:
+                # no geom file was provided as input
+                num_channels = X.shape[0]
+                if num_channels > 6:
+                    raise Exception('For more than six channels, we require that a geom.csv be provided')
+                # otherwise make a trivial geometry file
+                print('Making a trivial geom file.')
+                geom = np.zeros((X.shape[0], 2))
             recording = se.NumpyRecordingExtractor(X, samplerate=30000, geom=geom)
             recording = st.preprocessing.bandpass_filter(
                 recording=recording,
@@ -156,8 +174,6 @@ class CustomSorting(mlpr.Processor):
                 recording = st.preprocessing.whiten(recording=recording)
 
             num_workers = 2
-
-            print('-------------------------------------------- 1')
 
             sorting = ml_ms4alg.mountainsort4(
                 recording=recording,
@@ -258,21 +274,27 @@ def _combine_metrics(metrics1, metrics2, metrics_out):
     if retcode != 0:
         raise Exception('problem running ms3.combine_metrics')
 
+def _read_geom_csv(path):
+    geom = np.genfromtxt(path, delimiter=',')
+    return geom
 
-def spike_sorting(recording_file_in, firings_out, metrics_out, args):
-    CustomSorting.execute(
+def spike_sorting(*, recording_file_in, geom_in, firings_out, metrics_out, args):
+    params = dict(
+        recording_file_in=recording_file_in,
+        firings_out=firings_out,
+        metrics_out=metrics_out,
         mask_out_artifacts=True,
         freq_min=300,
         freq_max=6000,
         whiten=True,
         samplerate=30000,
-        recording_file_in=recording_file_in,
-        firings_out=firings_out,
-        metrics_out=metrics_out,
         detect_sign=-1,
         adjacency_radius=50,
         _force_run=args.force_run
     )
+    if geom_in:
+        params['geom_in'] = geom_in
+    CustomSorting.execute(**params)
 
 def mkdir2(path):
     if not os.path.exists(path):
