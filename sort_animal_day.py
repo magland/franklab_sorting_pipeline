@@ -128,9 +128,6 @@ class CustomSorting(mlpr.Processor):
         recording = se.NumpyRecordingExtractor(X, samplerate=30000, geom=geom)
 
         num_workers = 2
-        os.environ['MKL_NUM_THREADS'] = str(num_workers)
-        os.environ['NUMEXPR_NUM_THREADS'] = str(num_workers)
-        os.environ['OMP_NUM_THREADS'] = str(num_workers)
 
         sorting = ml_ms4alg.mountainsort4(
             recording=recording,
