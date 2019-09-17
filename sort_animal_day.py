@@ -9,6 +9,7 @@ import os
 from mountaintools import client as mt
 import spikeextractors as se
 import spikeforest as sf
+import spikeforestsorters as sorters
 import ml_ms4alg
 import numpy as np
 import mlprocessors as mlpr
@@ -58,11 +59,13 @@ def main():
                 print('PROCESSING NTRODE: {}'.format(ntrode['path']))
                 mkdir2(animal_day_output_path + '/' + epoch['name'] + '/' + ntrode['name'])
                 firings_out = animal_day_output_path + '/' + epoch['name'] + '/' + ntrode['name'] + '/firings.mda'
+                metrics_out = animal_day_output_path + '/' + epoch['name'] + '/' + ntrode['name'] + '/metrics.json'
                 recording_file_in = ntrode['recording_file']
                 print('Sorting...')
                 spike_sorting(
                     recording_file_in,
                     firings_out,
+                    metrics_out,
                     args
                 )
         JQ.wait()
@@ -97,10 +100,12 @@ def mkdir2(path):
 # See: https://github.com/flatironinstitute/spikeforest/blob/master/spikeforest/spikeforestsorters/mountainsort4/mountainsort4.py
 class CustomSorting(mlpr.Processor):
     NAME = 'CustomSorting'
-    VERSION = '0.1.5'
+    VERSION = '0.1.6'
 
     recording_file_in = mlpr.Input('Path to raw.mda')
-    firings_out = mlpr.Output('Output firings file')
+    firings_out = mlpr.Output('Output firings.mda file')
+    # firings_curated_out = mlpr.Output('Output firings.curated.mda file')
+    metrics_out = mlpr.Output('Metrics .json output')
 
     samplerate = mlpr.FloatParameter("Sampling frequency")
 
@@ -152,6 +157,8 @@ class CustomSorting(mlpr.Processor):
 
             num_workers = 2
 
+            print('-------------------------------------------- 1')
+
             sorting = ml_ms4alg.mountainsort4(
                 recording=recording,
                 detect_sign=self.detect_sign,
@@ -159,12 +166,43 @@ class CustomSorting(mlpr.Processor):
                 clip_size=self.clip_size,
                 detect_threshold=self.detect_threshold,
                 detect_interval=self.detect_interval,
-                num_workers=num_workers
+                num_workers=num_workers,
             )
-            sf.SFMdaSortingExtractor.write_sorting(
-                sorting=sorting,
-                save_path=self.firings_out
-            )
+            sf.SFMdaSortingExtractor.write_sorting(sorting=sorting, save_path=self.firings_out)
+
+            # not sure why this is not working
+            # result = sorters.MountainSort4.execute(
+            #     recording_dir=recording_dir,
+            #     firings_out=self.firings_out,
+            #     detect_sign=self.detect_sign,
+            #     adjacency_radius=self.adjacency_radius,
+            #     clip_size=self.clip_size,
+            #     detect_threshold=self.detect_threshold,
+            #     detect_interval=self.detect_interval,
+            #     num_workers=num_workers,
+            #     _use_cache=False
+            # )
+
+            
+            print('Writing preprocessed data, preparing for automated curation...')
+            recording_dir = tmpdir + '/pre'
+            sf.SFMdaRecordingExtractor.write_recording(recording=recording, save_path=recording_dir)
+
+            print('Computing cluster metrics...')
+            cluster_metrics_path = tmpdir +'/cluster_metrics.json'
+            _cluster_metrics(recording_dir + '/raw.mda', self.firings_out, cluster_metrics_path)
+
+            print('Computing isolation metrics...')
+            isolation_metrics_path = tmpdir +'/isolation_metrics.json'
+            pair_metrics_path = tmpdir +'/pair_metrics.json'
+            _isolation_metrics(recording_dir + '/raw.mda', self.firings_out, isolation_metrics_path, pair_metrics_path)
+
+            print('Combining metrics...')
+            metrics_path = tmpdir +'/metrics.json'
+            _combine_metrics(cluster_metrics_path, isolation_metrics_path, metrics_path)
+
+            shutil.copy(metrics_path, self.metrics_out)
+            
 
 class TemporaryDirectory():
     def __init__(self):
@@ -183,16 +221,45 @@ class TemporaryDirectory():
 def _mask_out_artifacts(timeseries_in, timeseries_out):
     script = ShellScript('''
     #!/bin/bash
-    mp-run-process ms3.mask_out_artifacts --timeseries {} --timeseries_out {}
+    ml-run-process ms3.mask_out_artifacts -i timeseries:{} -o timeseries_out:{} -p threshold:6 interval_size:2000 --force_run
     '''.format(timeseries_in, timeseries_out))
     script.start()
     retcode = script.wait()
     if retcode != 0:
         raise Exception('problem running ms3.mask_out_artifacts')
 
+def _cluster_metrics(timeseries, firings, metrics_out):
+    script = ShellScript('''
+    #!/bin/bash
+    ml-run-process ms3.cluster_metrics -i timeseries:{} firings:{} -o cluster_metrics_out:{} -p samplerate:30000 --force_run
+    '''.format(timeseries, firings, metrics_out))
+    script.start()
+    retcode = script.wait()
+    if retcode != 0:
+        raise Exception('problem running ms3.cluster_metrics')
+
+def _isolation_metrics(timeseries, firings, metrics_out, pair_metrics_out):
+    script = ShellScript('''
+    #!/bin/bash
+    ml-run-process ms3.isolation_metrics -i timeseries:{} firings:{} -o metrics_out:{} pair_metrics_out:{} --force_run
+    '''.format(timeseries, firings, metrics_out, pair_metrics_out))
+    script.start()
+    retcode = script.wait()
+    if retcode != 0:
+        raise Exception('problem running ms3.isolation_metrics')
+
+def _combine_metrics(metrics1, metrics2, metrics_out):
+    script = ShellScript('''
+    #!/bin/bash
+    ml-run-process ms3.combine_cluster_metrics -i metrics_list:{} metrics_list:{} -o metrics_out:{} --force_run
+    '''.format(metrics1, metrics2, metrics_out))
+    script.start()
+    retcode = script.wait()
+    if retcode != 0:
+        raise Exception('problem running ms3.combine_metrics')
 
 
-def spike_sorting(recording_file_in, firings_out, args):
+def spike_sorting(recording_file_in, firings_out, metrics_out, args):
     CustomSorting.execute(
         mask_out_artifacts=True,
         freq_min=300,
@@ -201,6 +268,7 @@ def spike_sorting(recording_file_in, firings_out, args):
         samplerate=30000,
         recording_file_in=recording_file_in,
         firings_out=firings_out,
+        metrics_out=metrics_out,
         detect_sign=-1,
         adjacency_radius=50,
         _force_run=args.force_run
