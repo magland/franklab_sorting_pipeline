@@ -28,27 +28,26 @@ def main():
 
     # Start the job queue
     job_handler = mlpr.ParallelJobHandler(3)
-    # for now the parallel job queue seems to have an issue
-    # with mlpr.JobQueue(job_handler=job_handler) as JQ:
-    for epoch in epochs:
-        print('PROCESSING EPOCH: {}'.format(epoch['path']))
-        mkdir2(animal_day_output_path + '/' + epoch['name'])
-        mkdir2(intermediate_path + '/' + epoch['name'])
-        for ntrode in epoch['ntrodes']:
-            print('PROCESSING NTRODE: {}'.format(ntrode['path']))
-            mkdir2(animal_day_output_path + '/' + epoch['name'] + '/' + ntrode['name'])
-            recording_dir = intermediate_path + '/' + epoch['name'] + '/' + ntrode['name']
-            firings_out = animal_day_output_path + '/' + epoch['name'] + '/' + ntrode['name'] + '/firings.mda'
-            X = sf.mdaio.readmda(mt.realizeFile(ntrode['ephys']))
-            geom = np.zeros((X.shape[0], 2))
-            recording = se.NumpyRecordingExtractor(X, samplerate=30000, geom=geom)
-            sf.SFMdaRecordingExtractor.write_recording(recording=recording, save_path=recording_dir)
-            print('Sorting...')
-            spike_sorting(
-                recording_dir,
-                firings_out
-            )
-        #JQ.wait()
+    with mlpr.JobQueue(job_handler=job_handler) as JQ:
+        for epoch in epochs:
+            print('PROCESSING EPOCH: {}'.format(epoch['path']))
+            mkdir2(animal_day_output_path + '/' + epoch['name'])
+            mkdir2(intermediate_path + '/' + epoch['name'])
+            for ntrode in epoch['ntrodes']:
+                print('PROCESSING NTRODE: {}'.format(ntrode['path']))
+                mkdir2(animal_day_output_path + '/' + epoch['name'] + '/' + ntrode['name'])
+                recording_dir = intermediate_path + '/' + epoch['name'] + '/' + ntrode['name']
+                firings_out = animal_day_output_path + '/' + epoch['name'] + '/' + ntrode['name'] + '/firings.mda'
+                X = sf.mdaio.readmda(mt.realizeFile(ntrode['ephys']))
+                geom = np.zeros((X.shape[0], 2))
+                recording = se.NumpyRecordingExtractor(X, samplerate=30000, geom=geom)
+                sf.SFMdaRecordingExtractor.write_recording(recording=recording, save_path=recording_dir)
+                print('Sorting...')
+                spike_sorting(
+                    recording_dir,
+                    firings_out
+                )
+        JQ.wait()
 
 def load_ntrode(path, *, name):
     return dict(
@@ -71,8 +70,6 @@ def load_epoch(path, *, name):
     )
 
 
-
-
 # Start the job queue
 def mkdir2(path):
     if not os.path.exists(path):
@@ -81,7 +78,7 @@ def mkdir2(path):
 # See: https://github.com/flatironinstitute/spikeforest/blob/master/spikeforest/spikeforestsorters/mountainsort4/mountainsort4.py
 class CustomSorting(mlpr.Processor):
     NAME = 'CustomSorting'
-    VERSION = '0.1.0'
+    VERSION = '0.1.2'
 
     recording_dir = mlpr.Input('Directory of recording', directory=True)
     firings_out = mlpr.Output('Output firings file')
@@ -109,16 +106,21 @@ class CustomSorting(mlpr.Processor):
         # Replace this function with system calls, etc to do
         # mask_out_artifactrs, ml_ms4alg, curation, etc.
         print('================================================= test 1')
-        sorters.MountainSort4.execute(
-            recording_dir=self.recording_dir,
-            firings_out=self.firings_out,
+        recording = sf.SFMdaRecordingExtractor(
+            dataset_directory=self.recording_dir
+        )
+        sorting = ml_ms4alg.mountainsort4(
+            recording=recording,
             detect_sign=self.detect_sign,
-            clip_size=self.clip_size,
             adjacency_radius=self.adjacency_radius,
+            clip_size=self.clip_size,
             detect_threshold=self.detect_threshold,
             detect_interval=self.detect_interval,
-            num_workers=1,
-            _use_cache=False
+            num_workers=1
+        )
+        sf.SFMdaSortingExtractor.write_sorting(
+            sorting=sorting,
+            save_path=self.firings_out
         )
         print('================================================= test 2')
 
