@@ -66,6 +66,6 @@ Please submit other requests via github issues.
 
 It expected that members of the Frank lab will maintain and update it. Contact Jeremy to be added to the repo.
 
-All users are responsible for updating this repo when clarifications or fixes need to be made by submitting pull requests or making notes in the github issue tracker.
+All users are responsible for updating this repo when clarifications or fixes need to be made by submitting [pull requests](https://help.github.com/en/articles/creating-a-pull-request-from-a-fork) or making notes in the github issue tracker.
 
 
