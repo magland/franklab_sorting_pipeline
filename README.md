@@ -56,6 +56,8 @@ It is intended that users will adapt the .sh and .py scripts to their own needs 
 
 * Add ability to simultaneously sort the entire animal day (sort a concatenated file).
 
+* Migrate away from using ml_ms3 conda package (toward pure python solution)
+
 * Add ability to swap in other sorters supported by [SpikeToolkit](https://github.com/SpikeInterface/spiketoolkit). Caution: Care must be taken in which version of spiketoolkit is installed.
 
 Please submit other requests via github issues.
