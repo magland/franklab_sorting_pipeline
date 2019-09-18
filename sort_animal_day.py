@@ -282,60 +282,72 @@ class TemporaryDirectory():
         return self._path
 
 def _bandpass_filter(timeseries_in, timeseries_out):
-    script = ShellScript('''
+    code = '''
     #!/bin/bash
     ml-run-process ms3.bandpass_filter -i timeseries:{} -o timeseries_out:{} -p samplerate:30000 freq_min:300 freq_max:6000 --force_run
-    '''.format(timeseries_in, timeseries_out))
+    '''.format(timeseries_in, timeseries_out)
+    print(code)
+    script = ShellScript(code)
     script.start()
     retcode = script.wait()
     if retcode != 0:
         raise Exception('problem running ms3.bandpass_filter')
 
 def _whiten(timeseries_in, timeseries_out):
-    script = ShellScript('''
+    code = '''
     #!/bin/bash
     ml-run-process ms3.whiten -i timeseries:{} -o timeseries_out:{} --force_run
-    '''.format(timeseries_in, timeseries_out))
+    '''.format(timeseries_in, timeseries_out)
+    print(code)
+    script = ShellScript(code)
     script.start()
     retcode = script.wait()
     if retcode !=0:
         raise Exception('problem running ms3.whiten')
 
 def _mask_out_artifacts(timeseries_in, timeseries_out):
-    script = ShellScript('''
+    code = '''
     #!/bin/bash
     ml-run-process ms3.mask_out_artifacts -i timeseries:{} -o timeseries_out:{} -p threshold:6 interval_size:2000 --force_run
-    '''.format(timeseries_in, timeseries_out))
+    '''.format(timeseries_in, timeseries_out)
+    print(code)
+    script = ShellScript(code)
     script.start()
     retcode = script.wait()
     if retcode != 0:
         raise Exception('problem running ms3.mask_out_artifacts')
 
 def _cluster_metrics(timeseries, firings, metrics_out):
-    script = ShellScript('''
+    code = '''
     #!/bin/bash
     ml-run-process ms3.cluster_metrics -i timeseries:{} firings:{} -o cluster_metrics_out:{} -p samplerate:30000 --force_run
-    '''.format(timeseries, firings, metrics_out))
+    '''.format(timeseries, firings, metrics_out)
+    print(script)
+    script = ShellScript(code)
     script.start()
     retcode = script.wait()
     if retcode != 0:
         raise Exception('problem running ms3.cluster_metrics')
 
 def _isolation_metrics(timeseries, firings, metrics_out, pair_metrics_out):
-    script = ShellScript('''
+    code = '''
     #!/bin/bash
     ml-run-process ms3.isolation_metrics -i timeseries:{} firings:{} -o metrics_out:{} pair_metrics_out:{} -p compute_bursting_parents:true --force_run
-    '''.format(timeseries, firings, metrics_out, pair_metrics_out))
+    '''.format(timeseries, firings, metrics_out, pair_metrics_out)
+    print(code)
+    script = ShellScript(code)
     script.start()
     retcode = script.wait()
     if retcode != 0:
         raise Exception('problem running ms3.isolation_metrics')
 
 def _combine_metrics(metrics1, metrics2, metrics_out):
-    script = ShellScript('''
+    code = '''
     #!/bin/bash
     ml-run-process ms3.combine_cluster_metrics -i metrics_list:{} metrics_list:{} -o metrics_out:{} --force_run
-    '''.format(metrics1, metrics2, metrics_out))
+    '''.format(metrics1, metrics2, metrics_out)
+    print(code)
+    script = ShellScript(code)
     script.start()
     retcode = script.wait()
     if retcode != 0:
