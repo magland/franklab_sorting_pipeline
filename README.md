@@ -64,7 +64,7 @@ Please submit other requests via github issues.
 
 ## Who maintains this repo?
 
-Jeremy owns the repo but it expected that members of the Frank lab will maintain and update it. Contact Jeremy to be added to the repo.
+It expected that members of the Frank lab will maintain and update it. Contact Jeremy to be added to the repo.
 
 All users are responsible for updating this repo when clarifications or fixes need to be made by submitting pull requests or making notes in the github issue tracker.
 
