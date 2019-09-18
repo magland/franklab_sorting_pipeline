@@ -1,6 +1,6 @@
 # franklab_sorting_pipeline
 
-Spike sorting pipeline for use in Loren Frank's lab, specifically for Hannah and Jason's data.
+Parallelized spike sorting pipeline for use in Loren Frank's lab, specifically for Hannah and Jason's data.
 
 The basic functionality is to input a directory representing a single animal day of ephys data and to obtain an output directory containing the spike sorting results.
 
