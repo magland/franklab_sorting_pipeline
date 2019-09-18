@@ -3,7 +3,7 @@
 # prerequisites:
 # pip install spikeforest
 # pip install ml_ms4alg
-# conda install -c mountainlab ml_ms3
+# conda install -c flatiron mountainlab ml_ms3
 # caution: do not install ml_ms4alg from conda package - it conflicts with the pypi version
 
 # Spike sorting of one animal-day
