@@ -15,15 +15,14 @@ import spikeforestsorters as sorters
 import ml_ms4alg
 import numpy as np
 import mlprocessors as mlpr
-import spiketoolkit as st
 import argparse
-import tempfile
 import shutil
+
+from misc_utils import mkdir2, TemporaryDirectory, read_geom_csv
 from label_map import create_label_map, apply_label_map
 from shellscript import ShellScript
 
 def main():
-
     # command-line arguments
     parser = argparse.ArgumentParser(description="Franklab spike sorting for a single animal day")
     parser.add_argument('--input', help='The input directory containing the animal day ephys data', )
@@ -120,13 +119,6 @@ def load_epoch(path, *, name, test=False):
         ntrodes=ntrodes
     )
 
-
-# Start the job queue
-def mkdir2(path):
-    # make a directory if it doesn't already exist
-    if not os.path.exists(path):
-        os.mkdir(path)
-
 # This is a mountaintools processor
 class CustomSorting(mlpr.Processor):
     NAME = 'CustomSorting'
@@ -195,7 +187,7 @@ class CustomSorting(mlpr.Processor):
             # handle the geom
             if type(self.geom_in) == str:
                 print('Using geom.csv from a file', self.geom_in)
-                geom = _read_geom_csv(self.geom_in)
+                geom = read_geom_csv(self.geom_in)
             else:
                 # no geom file was provided as input
                 num_channels = X.shape[0]
@@ -266,20 +258,24 @@ class CustomSorting(mlpr.Processor):
             print('Applying label map...')
             apply_label_map(firings=self.firings_out, label_map=label_map_path, firings_out=self.firings_curated_out)        
 
-# Utility class for a temporary directory that cleans itself up
-class TemporaryDirectory():
-    def __init__(self):
-        pass
-
-    def __enter__(self):
-        self._path = tempfile.mkdtemp()
-        return self._path
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        shutil.rmtree(self._path)
-
-    def path(self):
-        return self._path
+def spike_sorting(*, recording_file_in, geom_in, firings_out, metrics_out, firings_curated_out, args):
+    params = dict(
+        recording_file_in=recording_file_in,
+        firings_out=firings_out,
+        metrics_out=metrics_out,
+        firings_curated_out=firings_curated_out,
+        mask_out_artifacts=True,
+        freq_min=300,
+        freq_max=6000,
+        whiten=True,
+        samplerate=30000,
+        detect_sign=-1,
+        adjacency_radius=50,
+        _force_run=args.force_run
+    )
+    if geom_in:
+        params['geom_in'] = geom_in
+    CustomSorting.execute(**params)
 
 def _bandpass_filter(timeseries_in, timeseries_out):
     code = '''
@@ -352,29 +348,6 @@ def _combine_metrics(metrics1, metrics2, metrics_out):
     retcode = script.wait()
     if retcode != 0:
         raise Exception('problem running ms3.combine_metrics')
-
-def _read_geom_csv(path):
-    geom = np.genfromtxt(path, delimiter=',')
-    return geom
-    
-def spike_sorting(*, recording_file_in, geom_in, firings_out, metrics_out, firings_curated_out, args):
-    params = dict(
-        recording_file_in=recording_file_in,
-        firings_out=firings_out,
-        metrics_out=metrics_out,
-        firings_curated_out=firings_curated_out,
-        mask_out_artifacts=True,
-        freq_min=300,
-        freq_max=6000,
-        whiten=True,
-        samplerate=30000,
-        detect_sign=-1,
-        adjacency_radius=50,
-        _force_run=args.force_run
-    )
-    if geom_in:
-        params['geom_in'] = geom_in
-    CustomSorting.execute(**params)
 
 if __name__ == '__main__':
     main()
