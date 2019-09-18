@@ -284,7 +284,7 @@ class TemporaryDirectory():
 def _bandpass_filter(timeseries_in, timeseries_out):
     code = '''
     #!/bin/bash
-    ml-run-process ms3.bandpass_filter -i timeseries:{} -o timeseries_out:{} -p samplerate:30000 freq_min:300 freq_max:6000 --force_run
+    ml-exec-process ms3.bandpass_filter -i timeseries:{} -o timeseries_out:{} -p samplerate:30000 freq_min:300 freq_max:6000
     '''.format(timeseries_in, timeseries_out)
     print(code)
     script = ShellScript(code)
@@ -296,7 +296,7 @@ def _bandpass_filter(timeseries_in, timeseries_out):
 def _whiten(timeseries_in, timeseries_out):
     code = '''
     #!/bin/bash
-    ml-run-process ms3.whiten -i timeseries:{} -o timeseries_out:{} --force_run
+    ml-exec-process ms3.whiten -i timeseries:{} -o timeseries_out:{}
     '''.format(timeseries_in, timeseries_out)
     print(code)
     script = ShellScript(code)
@@ -308,7 +308,7 @@ def _whiten(timeseries_in, timeseries_out):
 def _mask_out_artifacts(timeseries_in, timeseries_out):
     code = '''
     #!/bin/bash
-    ml-run-process ms3.mask_out_artifacts -i timeseries:{} -o timeseries_out:{} -p threshold:6 interval_size:2000 --force_run
+    ml-exec-process ms3.mask_out_artifacts -i timeseries:{} -o timeseries_out:{} -p threshold:6 interval_size:2000
     '''.format(timeseries_in, timeseries_out)
     print(code)
     script = ShellScript(code)
@@ -320,7 +320,7 @@ def _mask_out_artifacts(timeseries_in, timeseries_out):
 def _cluster_metrics(timeseries, firings, metrics_out):
     code = '''
     #!/bin/bash
-    ml-run-process ms3.cluster_metrics -i timeseries:{} firings:{} -o cluster_metrics_out:{} -p samplerate:30000 --force_run
+    ml-exec-process ms3.cluster_metrics -i timeseries:{} firings:{} -o cluster_metrics_out:{} -p samplerate:30000
     '''.format(timeseries, firings, metrics_out)
     print(code)
     script = ShellScript(code)
@@ -332,7 +332,7 @@ def _cluster_metrics(timeseries, firings, metrics_out):
 def _isolation_metrics(timeseries, firings, metrics_out, pair_metrics_out):
     code = '''
     #!/bin/bash
-    ml-run-process ms3.isolation_metrics -i timeseries:{} firings:{} -o metrics_out:{} pair_metrics_out:{} -p compute_bursting_parents:true --force_run
+    ml-exec-process ms3.isolation_metrics -i timeseries:{} firings:{} -o metrics_out:{} pair_metrics_out:{} -p compute_bursting_parents:true
     '''.format(timeseries, firings, metrics_out, pair_metrics_out)
     print(code)
     script = ShellScript(code)
@@ -344,7 +344,7 @@ def _isolation_metrics(timeseries, firings, metrics_out, pair_metrics_out):
 def _combine_metrics(metrics1, metrics2, metrics_out):
     code = '''
     #!/bin/bash
-    ml-run-process ms3.combine_cluster_metrics -i metrics_list:{} metrics_list:{} -o metrics_out:{} --force_run
+    ml-exec-process ms3.combine_cluster_metrics -i metrics_list:{} metrics_list:{} -o metrics_out:{}
     '''.format(metrics1, metrics2, metrics_out)
     print(code)
     script = ShellScript(code)
