@@ -322,7 +322,7 @@ def _cluster_metrics(timeseries, firings, metrics_out):
     #!/bin/bash
     ml-run-process ms3.cluster_metrics -i timeseries:{} firings:{} -o cluster_metrics_out:{} -p samplerate:30000 --force_run
     '''.format(timeseries, firings, metrics_out)
-    print(script)
+    print(code)
     script = ShellScript(code)
     script.start()
     retcode = script.wait()
