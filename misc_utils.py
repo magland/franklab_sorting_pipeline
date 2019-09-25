@@ -2,7 +2,7 @@
 import os
 import tempfile
 import shutil
-import numpy
+import numpy as np
 
 def mkdir2(path):
     # make a directory if it doesn't already exist
